@@ -1,10 +1,14 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from models.users import User, UserIn, USER_EXCLUDE_FIELDS, AccessToken
-from utils.security import hash_password
+from utils.security import hash_password, create_otp
 from utils.db import DB, COLS
 from fastapi.security import OAuth2PasswordRequestForm
 from utils.db_helpers import find_doc
 from models.enums import PKTypes
+from models.enums import Actions, Emails
+from utils.helper_funcs import make_email_verify_link
+from tasks.actors import task_send_email
+from datetime import datetime
 
 router = APIRouter(prefix="/users", tags=["users"])
 
@@ -31,6 +35,19 @@ async def create_new_user(body:  UserIn):
     )
 
     await DB[COLS.USERS].insert_one(new_user.model_dump())
+
+    hotp, otp_doc = await create_otp(new_user.uid, Actions.VERIFY_EMAIL)
+
+    otp = (hotp.generate(datetime.now().day)).decode()
+
+    email_data = {
+        "otp": otp,
+        "username": new_user.username,
+        "url": make_email_verify_link(new_user.email, otp_doc.token)
+    }
+
+    task_send_email.send(
+        new_user.email, Emails.VERIFY_EMAIL, email_data)
 
     return new_user
 

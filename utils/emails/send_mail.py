@@ -6,7 +6,7 @@ from email.message import EmailMessage
 from email.headerregistry import Address
 from jinja2 import Environment, PackageLoader, select_autoescape
 from config.settings import get_settings
-
+from models.enums import Emails
 
 settings = get_settings()
 
@@ -22,9 +22,9 @@ def render_to_string(template_name: str, **kwargs):
     return template.render(**kwargs, settings=settings)
 
 
-def dispatch_email(email_to: list[EmailStr] | EmailStr, email_type: str, email_data: dict):
+def dispatch_email(email_to: list[EmailStr] | EmailStr, email_type: Emails, email_data: dict):
 
-    if not email_type in EMAIL_DEFS:
+    if not email_type in EMAIL_DEFS.keys():
         raise ValueError("Invalid email type")
 
     conf = EMAIL_DEFS[email_type]

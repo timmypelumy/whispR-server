@@ -16,6 +16,7 @@ class Settings(BaseSettings):
     jwt_exp_hours: int = 24
     jwt_secret: str = "whispRSecret"
     jwt_algorithm: str = "HS256"
+    rabbitmq_host: str = "amqp://guest:guest@localhost:4001"
     mail_username: str = "whispR"
     mail_password: str = "mail_pass"
     mail_from: str = "whispRteam@whispR.com"
@@ -28,8 +29,9 @@ class Settings(BaseSettings):
     mail_domain_username:  str = "admin"
     encryption_key1: str = "whispRKey1"
     encryption_key2: str = "whispRKey2"
+    frontend_url: str = "http://localhost:3000"
 
-    model_config = SettingsConfigDict(env_file=".env")
+    model_config = SettingsConfigDict(env_file=".env", extra="allow")
 
 
 @lru_cache()

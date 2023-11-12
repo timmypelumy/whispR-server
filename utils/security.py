@@ -9,6 +9,7 @@ from fastapi import HTTPException, status
 from datetime import datetime, timedelta, timezone
 from models.misc import OTP
 from utils.db import COLS, DB
+from utils.db_helpers import find_doc
 import jwt
 import os
 import binascii
@@ -157,7 +158,7 @@ def verify_password(password: str, password_hash: str) -> bool:
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
 
-async def generate_otp(foreign_id, action):
+async def create_otp(foreign_id, action):
     secret = os.urandom(20)
     hotp = HOTP(
         secret,
@@ -165,16 +166,28 @@ async def generate_otp(foreign_id, action):
         SHA1(),
     )
 
-    tfa = OTP(
-        secret=encrypt(secret.decode()),
+    otp_doc = OTP(
+        secret=binascii.hexlify(encrypt(secret)).decode(),
         foreign_id=foreign_id,
         is_active=True,
         action=action
     )
-    await DB[COLS.OTPS].insert_one(tfa.model_dump())
+    await DB[COLS.OTPS].insert_one(otp_doc.model_dump())
 
-    return hotp, tfa
+    return hotp, otp_doc
 
 
-async def verify_otp(uid, otp):
-    pass
+async def recover_otp(uid):
+
+    otp_doc:  OTP = await find_doc(COLS.OTPS, "uid", uid, model=OTP)
+
+    if not otp_doc:
+        raise HTTPException(404, "Invalid OTP")
+
+    hotp = HOTP(
+        decrypt(binascii.unhexlify(otp_doc.secret.encode())),
+        6,
+        SHA1(),
+    )
+
+    return hotp, otp_doc
