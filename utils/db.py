@@ -7,7 +7,7 @@ settings = get_settings()
 
 class COLS(str, Enum):
     USERS = "users"
-
+    OTPS = "otps"
 
 
 client = motor_asyncio.AsyncIOMotorClient(settings.db_url)

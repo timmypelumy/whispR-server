@@ -1,5 +1,5 @@
 from cryptography.hazmat.primitives.kdf.scrypt import Scrypt
-from cryptography.hazmat.primitives.twofactor.totp import TOTP
+from cryptography.hazmat.primitives.twofactor.totp import HOTP
 from cryptography.fernet import MultiFernet, Fernet
 from cryptography.hazmat.primitives.hashes import SHA1, SHA256, Hash
 from cryptography.exceptions import InvalidKey
@@ -7,8 +7,10 @@ from config.settings import get_settings
 from base64 import b64encode, b64decode
 from fastapi import HTTPException, status
 from datetime import datetime, timedelta, timezone
-from models.misc import TwoFactor
+from models.misc import OTP
+from utils.db import COLS, DB
 import jwt
+import os
 import binascii
 
 
@@ -27,18 +29,6 @@ def decode_base64(data: str) -> bytes:
     return b64decode(data.encode())
 
 
-def create_totp_secret() -> str:
-
-    totp = TOTP(
-        settings.totp_secret.encode(),
-        6,
-        SHA1(),
-        30
-    )
-
-    return totp.generate().decode()
-
-
 def sha256(message: str) -> str:
 
     digest = Hash(SHA256())
@@ -48,7 +38,7 @@ def sha256(message: str) -> str:
 
 
 def encrypt(message: bytes) -> bytes:
-    keys = [settings.kek1, settings.kek2, settings.kek3]
+    keys = [settings.encryption_key1, settings.encryption_key2,]
     f = MultiFernet(Fernet(sha256(x)) for x in keys)
     token = f.encrypt(message)
     return token
@@ -56,7 +46,7 @@ def encrypt(message: bytes) -> bytes:
 
 def decrypt(token: bytes) -> bytes:
     bytes_token = token
-    keys = [settings.kek1, settings.kek2, settings.kek3]
+    keys = [settings.encryption_key1, settings.encryption_key2,]
     f = MultiFernet(Fernet(sha256(x)) for x in keys)
     message = f.decrypt(bytes_token)
     return message
@@ -165,3 +155,26 @@ def verify_password(password: str, password_hash: str) -> bool:
 
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+
+async def generate_otp(foreign_id, action):
+    secret = os.urandom(20)
+    hotp = HOTP(
+        secret,
+        6,
+        SHA1(),
+    )
+
+    tfa = OTP(
+        secret=encrypt(secret.decode()),
+        foreign_id=foreign_id,
+        is_active=True,
+        action=action
+    )
+    await DB[COLS.OTPS].insert_one(tfa.model_dump())
+
+    return hotp, tfa
+
+
+async def verify_otp(uid, otp):
+    pass

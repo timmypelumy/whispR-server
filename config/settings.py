@@ -26,6 +26,8 @@ class Settings(BaseSettings):
     mail_display_name: str = "whispR"
     mail_domain:  str = "https://mail.com"
     mail_domain_username:  str = "admin"
+    encryption_key1: str = "whispRKey1"
+    encryption_key2: str = "whispRKey2"
 
     model_config = SettingsConfigDict(env_file=".env")
 
