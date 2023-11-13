@@ -1,9 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from models.users import User, UserIn, USER_EXCLUDE_FIELDS, AccessToken
-from utils.security import hash_password, create_otp
+from utils.security import hash_password, create_otp, decode_base64, recover_otp
 from utils.db import DB, COLS
 from fastapi.security import OAuth2PasswordRequestForm
-from utils.db_helpers import find_doc
+from utils.db_helpers import find_doc, update_doc
 from models.enums import PKTypes
 from models.enums import Actions, Emails
 from utils.helper_funcs import make_email_verify_link
@@ -43,7 +43,7 @@ async def create_new_user(body:  UserIn):
     email_data = {
         "otp": otp,
         "username": new_user.username,
-        "url": make_email_verify_link(new_user.email, otp_doc.token)
+        "url": make_email_verify_link(new_user.uid, otp_doc.token)
     }
 
     task_send_email.send(
@@ -52,14 +52,47 @@ async def create_new_user(body:  UserIn):
     return new_user
 
 
-@router.get("/{pk}", response_model=User, status_code=status.HTTP_200_OK, response_model_exclude=USER_EXCLUDE_FIELDS)
-async def get_user_by_primary_key(pk:  str, pk_type: PKTypes = Query(PKTypes.UID)):
-    user = await find_doc(COLS.USERS, pk_type.value, pk, model=User)
+@router.get("/verify-email", status_code=status.HTTP_200_OK, response_model=dict)
+async def verify_email(token_str: str = Query(alias="token")):
+
+    uid_section, token = token_str.split(".")
+
+    if not uid_section or not token:
+        raise HTTPException(400, "Invalid token")
+
+    user_id = decode_base64(uid_section).decode()
+
+    print("\n", user_id, "\n")
+    user = await find_doc(COLS.USERS, "uid", user_id, model=User)
 
     if not user:
-        raise HTTPException(404, "user does not exist")
+        raise HTTPException(404, "User does not exist!")
 
-    return user
+    if user.email_verified:
+        raise HTTPException(400, "Email already verified!")
+
+    _, otp_doc = await recover_otp(token)
+
+    if not otp_doc:
+        raise HTTPException(404, "Invalid OTP")
+
+    if otp_doc.action != Actions.VERIFY_EMAIL:
+        raise HTTPException(400, "Invalid OTP")
+
+    if not otp_doc.is_active:
+        raise HTTPException(400, "OTP has expired")
+
+    await update_doc(COLS.USERS, "uid", user_id, {
+        "email_verified": True
+    })
+
+    await update_doc(COLS.OTPS, "token", token, {
+        "is_active": False
+    })
+
+    return {
+        "message": "Email verified successfully!"
+    }
 
 
 @router.post("/login", response_model=AccessToken, status_code=status.HTTP_200_OK, response_model_exclude=USER_EXCLUDE_FIELDS)
@@ -84,3 +117,13 @@ async def login_user(form_data: OAuth2PasswordRequestForm = Depends()):
         access_token=jwt_token,
         token_type="bearer"
     )
+
+
+@router.get("/{pk}", response_model=User, status_code=status.HTTP_200_OK, response_model_exclude=USER_EXCLUDE_FIELDS)
+async def get_user_by_primary_key(pk:  str, pk_type: PKTypes = Query(PKTypes.UID)):
+    user = await find_doc(COLS.USERS, pk_type.value, pk, model=User)
+
+    if not user:
+        raise HTTPException(404, "user does not exist")
+
+    return user

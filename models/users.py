@@ -52,6 +52,7 @@ class User(BaseUser):
     uid: str = Field(default_factory=get_uuid, alias="uid")
     is_active: bool = Field(default=True, alias="isActive")
     is_admin: bool = Field(default=False, alias="isAdmin")
+    email_verified: bool = Field(default=False, alias="emailVerified")
     password_hash: str = Field(alias="passwordHash")
     created_at: float = Field(
         default_factory=get_utc_timestamp, alias="createdAt")

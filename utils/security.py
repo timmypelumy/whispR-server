@@ -177,12 +177,12 @@ async def create_otp(foreign_id, action):
     return hotp, otp_doc
 
 
-async def recover_otp(uid):
+async def recover_otp(token):
 
-    otp_doc:  OTP = await find_doc(COLS.OTPS, "uid", uid, model=OTP)
+    otp_doc:  OTP = await find_doc(COLS.OTPS, "token", token, model=OTP)
 
     if not otp_doc:
-        raise HTTPException(404, "Invalid OTP")
+        raise HTTPException(404, "Invalid OTP, please try again.")
 
     hotp = HOTP(
         decrypt(binascii.unhexlify(otp_doc.secret.encode())),

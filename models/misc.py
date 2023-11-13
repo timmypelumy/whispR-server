@@ -12,4 +12,4 @@ class OTP(BaseModel):
     action: str
     is_active: bool
     created_at: float = Field(default_factory=get_utc_timestamp)
-    updated_at: float | None = Field( default= None)
+    updated_at: float | None = Field(default=None)
